@@ -63,4 +63,3 @@ class RunApp:
             elif choix == '0':
                 print( self.BYellow + "Tres bien a bientot !"+self.RESET)
                 break
-            

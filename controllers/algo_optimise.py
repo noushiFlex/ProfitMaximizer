@@ -17,14 +17,17 @@ class AlgoGlouton:
 
         names = df['name'].tolist()
         prices = df['price'].tolist()
-        profits = df['profit'].tolist()
+        profits = df['profit'].tolist()  # Profits en pourcentage
 
         ratio = []
+        ignored_count = 0
         for i in range(len(prices)):
             if prices[i] > 0:  # Éviter la division par zéro
-                ratio.append((profits[i] / prices[i], names[i], prices[i], profits[i]))
+                # Calculer le profit en euros (prix * pourcentage / 100)
+                profit_euros = prices[i] * (profits[i] / 100)
+                ratio.append((profit_euros / prices[i], names[i], prices[i], profit_euros))
             else:
-                print(f"Action ignorée (prix nul) : {names[i]} avec un prix de {prices[i]}€")
+                ignored_count += 1  # Compter les actions ignorées
 
         if not ratio:
             raise ValueError("Aucune action valide disponible avec un prix supérieur à zéro.")
@@ -43,20 +46,32 @@ class AlgoGlouton:
             if remaining_money >= r[2]:  # Prix de l'action
                 chosen_items.append(r[1])  # Nom
                 chosen_prices.append(r[2])  # Prix
-                chosen_profits.append(r[3])  # Profit
+                chosen_profits.append(r[3])  # Profit en euros
                 remaining_money -= r[2]
                 total_profit += r[3]
 
-        return total_profit, chosen_items, chosen_prices, chosen_profits
-
+        return total_profit, chosen_items, chosen_prices, chosen_profits, ignored_count
+    
     def display_results(self):
-        profit, chosen_items, chosen_prices, chosen_profits = self.greedy_algo()
+        profit, chosen_items, chosen_prices, chosen_profits, ignored_count = self.greedy_algo()
+
+        # Calculer l'investissement total
+        total_investment = sum(chosen_prices)
+
+        # Calcul du retour sur investissement en pourcentage
+        roi_percent = (profit / total_investment) * 100 if total_investment > 0 else 0
 
         print("Algorithme glouton :")
-        print(f"Profit maximal : {profit:.2f}€")  # Afficher le profit en euros
-        print("Actions sélectionnées :")
+        print(f"Retour sur investissement : {profit:.2f}€")
+        print(f"Investissement total : {total_investment:.2f}€")
+        # print(f"Retour sur investissement (ROI en %) : {roi_percent:.2f}%")
+        print(f"Actions sélectionnées :")
         for item, price, profit in zip(chosen_items, chosen_prices, chosen_profits):
-            print(f"Nom : {item}, Prix : {price:.2f}€, Profit : {profit}")
+            print(f"Nom : {item}, Prix : {price:.2f}€, Profit : {profit:.2f}%")
+        
+        if ignored_count > 0:
+            print(f"\n{ignored_count} action(s) ignorée(s) en raison d'un prix nul.")
 
     def main(self):
         self.display_results()
+
