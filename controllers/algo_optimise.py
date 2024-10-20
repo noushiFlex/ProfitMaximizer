@@ -1,77 +1,109 @@
 import pandas as pd
-import time
 
 class AlgoGlouton:
     def __init__(self, datasetpath: str, money: float):
         self.datasetpath = datasetpath
         self.money = money
 
-    def greedy_algo(self) -> tuple:
-        df = pd.read_csv(self.datasetpath)
+    def convert_old_format(self, df):
+        """Convertit l'ancien format en nouveau format."""
+        df['Bénéfice (après 2 ans)'] = df['profit'] / df['price'] * 100  # Convertir le profit en pourcentage
+        df['Coût par action (en euros)'] = df['price']  # Assigner le prix
+        df['Actions'] = df['name']  # Assigner le nom
+        return df[['Actions', 'Coût par action (en euros)', 'Bénéfice (après 2 ans)']]
 
-        if 'name' not in df.columns or 'price' not in df.columns or 'profit' not in df.columns:
-            raise ValueError("Le fichier CSV doit contenir les colonnes 'name', 'price' et 'profit'.")
+    def knapsack(self) -> tuple:
+        # Lecture du fichier CSV avec un séparateur spécifié
+        df = pd.read_csv(self.datasetpath, sep=';', engine='python')
 
-        if df.empty:
-            raise ValueError("Le fichier CSV est vide.")
+        # Nettoyer les noms de colonnes en supprimant les espaces
+        df.columns = df.columns.str.strip()
 
-        names = df['name'].tolist()
-        prices = df['price'].tolist()
-        profits = df['profit'].tolist()  # Profits en pourcentage
+        # Afficher les colonnes du DataFrame pour débogage
+        print("Colonnes détectées :", df.columns.tolist())
 
-        ratio = []
-        ignored_count = 0
-        for i in range(len(prices)):
-            if prices[i] > 0:  # Éviter la division par zéro
-                # Calculer le profit en euros (prix * pourcentage / 100)
-                profit_euros = prices[i] * (profits[i] / 100)
-                ratio.append((profit_euros / prices[i], names[i], prices[i], profit_euros))
-            else:
-                ignored_count += 1  # Compter les actions ignorées
+        # Vérifier le format du dataset
+        if 'Actions' in df.columns and 'Coût par action (en euros)' in df.columns and 'Bénéfice (après 2 ans)' in df.columns:
+            # Nouveau format
+            print("Nouveau format détecté : Pas de conversion nécessaire.")
+            names = df['Actions'].tolist()
 
-        if not ratio:
-            raise ValueError("Aucune action valide disponible avec un prix supérieur à zéro.")
+            # Convertir les colonnes en types numériques
+            df['Coût par action (en euros)'] = pd.to_numeric(df['Coût par action (en euros)'], errors='coerce')
+            
+            # Nettoyer la colonne de bénéfice et convertir en type numérique
+            df['Bénéfice (après 2 ans)'] = df['Bénéfice (après 2 ans)'].str.replace('%', '').astype(float)  # Retirer '%' et convertir en float
+            df['Bénéfice (après 2 ans)'] = df['Bénéfice (après 2 ans)'] / 100  # Convertir en pourcentage décimal
 
-        # Trier par ratio profit/prix décroissant
-        ratio.sort(key=lambda x: x[0], reverse=True)
+            # Vérifier les NaN après conversion
+            if df['Coût par action (en euros)'].isnull().any() or df['Bénéfice (après 2 ans)'].isnull().any():
+                print("Attention : Il y a des valeurs NaN dans les colonnes de coût ou de bénéfice.")
 
+            prices = [int(price * 100) for price in df['Coût par action (en euros)'].tolist() if pd.notnull(price)]  # Convertir les prix en centimes
+            profits = [(df['Bénéfice (après 2 ans)'][i] * df['Coût par action (en euros)'][i]) for i in range(len(df)) if pd.notnull(df['Bénéfice (après 2 ans)'][i]) and pd.notnull(df['Coût par action (en euros)'][i])]  # Calculer les profits
+
+        elif 'name' in df.columns and 'price' in df.columns and 'profit' in df.columns:
+            # Ancien format
+            print("Ancien format détecté : Conversion nécessaire.")
+            df = self.convert_old_format(df)
+
+            # Convertir les colonnes en types numériques
+            df['Coût par action (en euros)'] = pd.to_numeric(df['Coût par action (en euros)'], errors='coerce')
+            
+            # Nettoyer la colonne de bénéfice et convertir en type numérique
+            df['Bénéfice (après 2 ans)'] = df['Bénéfice (après 2 ans)'].str.replace('%', '').astype(float)  # Retirer '%' et convertir en float
+            df['Bénéfice (après 2 ans)'] = df['Bénéfice (après 2 ans)'] / 100  # Convertir en pourcentage décimal
+
+            # Vérifier les NaN après conversion
+            if df['Coût par action (en euros)'].isnull().any() or df['Bénéfice (après 2 ans)'].isnull().any():
+                print("Attention : Il y a des valeurs NaN dans les colonnes de coût ou de bénéfice.")
+
+            names = df['Actions'].tolist()
+            prices = [int(price * 100) for price in df['Coût par action (en euros)'].tolist() if pd.notnull(price)]  # Convertir les prix en centimes
+            profits = [(df['Bénéfice (après 2 ans)'][i] * df['Coût par action (en euros)'][i]) for i in range(len(df)) if pd.notnull(df['Bénéfice (après 2 ans)'][i]) and pd.notnull(df['Coût par action (en euros)'][i])]  # Calculer les profits
+
+        else:
+            raise ValueError("Le fichier CSV doit contenir soit le format ancien ('name', 'price', 'profit'), soit le nouveau ('Actions', 'Coût par action (en euros)', 'Bénéfice (après 2 ans)').")
+
+        # Nombre d'actions et budget maximal
+        n = len(prices)
+        W = int(self.money * 100)  # Convertir le budget en centimes
+
+        # Vérification des tailles
+        assert len(prices) == n, "La liste des prix ne correspond pas au nombre d'actions."
+        assert len(profits) == n, "La liste des profits ne correspond pas au nombre d'actions."
+
+        # Filtrer les actions avec prix à zéro pour éviter la division par zéro
+        ratio = [(profits[i] / prices[i], names[i], prices[i], profits[i]) for i in range(n) if prices[i] > 0]
+
+        # Tri basé sur le ratio profit/prix
+        ratio.sort(reverse=True, key=lambda x: x[0])
+
+        # Sélection des actions les plus rentables
         total_profit = 0
         chosen_items = []
         chosen_prices = []
         chosen_profits = []
-        remaining_money = self.money
 
-        # Sélectionner les actions
         for r in ratio:
-            if remaining_money >= r[2]:  # Prix de l'action
-                chosen_items.append(r[1])  # Nom
-                chosen_prices.append(r[2])  # Prix
-                chosen_profits.append(r[3])  # Profit en euros
-                remaining_money -= r[2]
-                total_profit += r[3]
+            if W >= r[2]:  # Si le budget restant permet d'acheter cette action
+                W -= r[2]  # Réduire le budget disponible
+                total_profit += r[3]  # Ajouter le profit
+                chosen_items.append(r[1])
+                chosen_prices.append(r[2] / 100)  # Reconvertir en euros
+                chosen_profits.append(r[3])
 
-        return total_profit, chosen_items, chosen_prices, chosen_profits, ignored_count
-    
+        # Retourner le résultat
+        return total_profit, chosen_items, chosen_prices, chosen_profits
+
     def display_results(self):
-        profit, chosen_items, chosen_prices, chosen_profits, ignored_count = self.greedy_algo()
-
-        # Calculer l'investissement total
-        total_investment = sum(chosen_prices)
-
-        # Calcul du retour sur investissement en pourcentage
-        roi_percent = (profit / total_investment) * 100 if total_investment > 0 else 0
+        profit, chosen_items, chosen_prices, chosen_profits = self.knapsack()
 
         print("Algorithme glouton :")
-        print(f"Retour sur investissement : {profit:.2f}€")
-        print(f"Investissement total : {total_investment:.2f}€")
-        # print(f"Retour sur investissement (ROI en %) : {roi_percent:.2f}%")
-        print(f"Actions sélectionnées :")
+        print(f"Profit maximal : {profit:.2f}€")  # Afficher le profit en euros
+        print("Actions sélectionnées :")
         for item, price, profit in zip(chosen_items, chosen_prices, chosen_profits):
-            print(f"Nom : {item}, Prix : {price:.2f}€, Profit : {profit:.2f}%")
-        
-        if ignored_count > 0:
-            print(f"\n{ignored_count} action(s) ignorée(s) en raison d'un prix nul.")
+            print(f"Nom : {item}, Prix : {price:.2f}€, Profit : {profit:.2f}€")
 
     def main(self):
         self.display_results()
-
